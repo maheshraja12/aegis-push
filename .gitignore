@@ -1,0 +1,73 @@
+# Secrets & API Keys
+.env
+.env.*
+*.key
+secrets.yaml
+
+# Python runtime
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# SQLite database files (audit logs — may contain sensitive run data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+aegis_v3.log
+
+# IDE & Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Distribution
+*.whl
+*.tar.gz
+
+# Node (if any frontend tooling added later)
+node_modules/
+
+# Antigravity AI workspace
+.gemini/
+
+# Windows specific
+desktop.ini
+$RECYCLE.BIN/
