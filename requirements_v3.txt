@@ -1,0 +1,38 @@
+# ==============================================================================
+# Aegis V3: Enterprise Autonomous Infrastructure Resilience Engine
+# requirements_v3.txt
+# ==============================================================================
+
+# --- Inherited from V2 ---
+openai>=1.35.0
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+chromadb>=0.5.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+websockets>=12.0
+aiofiles>=23.0.0
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+tiktoken>=0.7.0
+watchdog>=4.0.0
+
+# --- V3 New Dependencies ---
+# System resource monitoring (process memory/CPU telemetry)
+psutil>=5.9.0
+
+# Rich terminal output for the orchestrator console
+rich>=13.0.0
+
+# HTTP client for cluster node simulation
+httpx>=0.27.0
+
+# Async task scheduling
+anyio>=4.0.0
+
+# --- V3 Gold Standard Additions ---
+# Async SQLite for persistent Raft log + pipeline audit trail
+aiosqlite>=0.20.0
+
+# Structured JSON logging (Datadog / Grafana / CloudWatch compatible)
+python-json-logger>=2.0.7
