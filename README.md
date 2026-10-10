@@ -8,11 +8,11 @@
 <img src="https://img.shields.io/badge/Pydantic-v2-E92063?style=for-the-badge&logo=pydantic&logoColor=white"/>
 <img src="https://img.shields.io/badge/Tests-28%20Passed-4CAF50?style=for-the-badge&logo=pytest&logoColor=white"/>
 <img src="https://img.shields.io/badge/License-MIT-FFC107?style=for-the-badge"/>
-<img src="https://img.shields.io/badge/Status-Production--Ready-2196F3?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Status-Experimental-orange?style=for-the-badge"/>
 
 <br/><br/>
 
-> **An enterprise-grade, AI-powered autonomous self-healing infrastructure engine that detects bugs, writes fixes using AI, mathematically proves they are safe, gets distributed consensus from a 5-node cluster, and deploys — all without any human intervention — in under 2 seconds.**
+> **An experimental Python project exploring AI-assisted repair workflows, sandbox checks, verification heuristics, simulated consensus, and telemetry. It is not yet validated for autonomous production remediation.**
 
 <br/>
 
@@ -54,7 +54,7 @@
 
 ---
 
-## 🎯 What is Aegis V3?
+## 🎯 What is Aegis V3?\n\n> **Project status:** Experimental / research prototype. Run only against the included dummy application or an isolated test environment. Do not connect it to production systems or enable unattended patch deployment until sandbox escape resistance, verifier soundness, consensus correctness, rollback behavior, secrets handling, and end-to-end recovery have been independently reviewed. CI passing means the configured checks passed; it is not a production-readiness certification.\n
 
 **Aegis V3** is an open-source, enterprise-grade **Autonomous Infrastructure Resilience Engine** built in Python. It combines cutting-edge technologies to create a fully automated software repair system:
 
@@ -65,7 +65,7 @@
 - 🐒 **Chaos Engineering** to intentionally break production and prove it can self-heal
 - 📊 **Real-time Telemetry Dashboard** to watch everything happen live
 
-The result: a system that heals your production software **faster than any human can be paged**, with **mathematical guarantees of correctness**.
+The goal is to explore safer automated remediation. Current test and simulation results do **not** establish production safety, formal correctness, or reliable sub-second recovery.
 
 ---
 
