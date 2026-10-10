@@ -832,8 +832,40 @@ class AegisV3Orchestrator:
         target_file: str,
         incident_id: str,
     ) -> StageResult:
-        """STAGE 7: Apply the patch, run tests, commit to Git."""
+        """STAGE 7: Apply the patch, run tests, commit to Git.
+
+        File writes and git branch changes are disabled unless an explicit
+        opt-in is set. The Python worker sandbox is not a security boundary.
+        """
         with _StageTimer(PipelineStage.DEPLOYMENT) as timer:
+            # Fail closed by default: this stage currently contains demo-specific
+            # patch logic and must never mutate a checkout just because the
+            # preceding simulated pipeline stages succeeded.
+            deploy_opt_in = os.getenv("AEGIS_ENABLE_DEMO_DEPLOYMENT", "").lower() in {
+                "1", "true", "yes"
+            }
+            if not deploy_opt_in:
+                if self._simulation:
+                    return StageResult(
+                        stage=PipelineStage.DEPLOYMENT,
+                        success=True,
+                        duration_us=timer.duration_us,
+                        detail=(
+                            "Safe mode: demo file writes and git changes were skipped. "
+                            "Set AEGIS_ENABLE_DEMO_DEPLOYMENT=1 only in a disposable test checkout."
+                        ),
+                        data={"deployment_skipped": True, "branch_name": None},
+                    )
+                return StageResult(
+                    stage=PipelineStage.DEPLOYMENT,
+                    success=False,
+                    duration_us=timer.duration_us,
+                    error=(
+                        "Deployment blocked: explicit demo opt-in is required. "
+                        "This implementation is not approved for production deployment."
+                    ),
+                    data={"deployment_skipped": True, "branch_name": None},
+                )
             try:
                 target_path = os.path.join(self._repo_root, target_file)
                 branch_name = f"aegis-v3/fix-{incident_id.lower()}"
