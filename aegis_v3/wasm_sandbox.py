@@ -46,7 +46,8 @@ import types
 import traceback
 import textwrap
 import tracemalloc
-import concurrent.futures
+import asyncio
+import multiprocessing
 import logging
 import uuid
 from contextlib import redirect_stdout
@@ -153,6 +154,27 @@ def _sandbox_worker(
     return captured, result_holder.get("return_value"), peak_kb
 
 
+
+def _sandbox_worker_entry(
+    send_conn: Any,
+    code_str: str,
+    allow_imports: list[str],
+    deny_builtins: list[str],
+    max_output_bytes: int,
+) -> None:
+    """Run the sandbox worker in a dedicated, parent-terminable child process."""
+    try:
+        result = _sandbox_worker(code_str, allow_imports, deny_builtins, max_output_bytes)
+        send_conn.send(("ok", result))
+    except BaseException:
+        try:
+            send_conn.send(("error", traceback.format_exc()))
+        except Exception:
+            pass
+    finally:
+        send_conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Denylist AST Visitor
 # ---------------------------------------------------------------------------
@@ -248,7 +270,9 @@ class WasmIsolationEngine:
 
     def __init__(self, config: Optional[SandboxConfig] = None) -> None:
         self._cfg = config or SandboxConfig()
-        self._process_pool = concurrent.futures.ProcessPoolExecutor(max_workers=2)
+        # A fresh process per patch can be terminated on timeout. ProcessPoolExecutor
+        # futures cannot reliably kill a worker that is already executing untrusted code.
+        self._closed = False
         logger.info(
             f"WasmIsolationEngine initialized | "
             f"timeout={self._cfg.max_execution_us}us | "
@@ -407,56 +431,99 @@ class WasmIsolationEngine:
         source_code: str,
         compilation: CompilationResult,
     ) -> ExecutionTrace:
+        """Execute a patch in a dedicated child process with a killable timeout.
+
+        This is stronger timeout handling than a process-pool future, but it is
+        NOT a complete security sandbox: Python object-model escapes and
+        filesystem/network access are not comprehensively isolated. Do not use
+        this as the sole boundary for untrusted code or production deployment.
+        Memory is measured with tracemalloc and checked after execution, so it
+        does not prevent an allocation spike from exhausting the host.
         """
-        Execute a compiled patch inside a process-isolated sandbox.
-
-        The worker runs in a ProcessPoolExecutor with restricted builtins and
-        captured stdout. A timeout cancels the awaiting future, but Python's
-        ProcessPoolExecutor does not guarantee termination of the worker
-        process; this is a best-effort timeout, NOT a security boundary or
-        equivalent to Wasm fuel metering. Do not run untrusted patches or
-        enable production deployment based on this mechanism alone.
-
-        Memory usage is measured with tracemalloc inside the worker. The
-        configured memory limit is enforced post-hoc, after the allocation
-        has already happened; it does not prevent memory exhaustion.
-
-        Args:
-            source_code:   The patch source text.
-            compilation:   The CompilationResult from compile_patch().
-
-        Returns:
-            ExecutionTrace with full execution metrics.
-        """
-        if compilation.status not in (SandboxStatus.COMPILED,):
+        if compilation.status != SandboxStatus.COMPILED:
             return ExecutionTrace(
                 patch_id=compilation.patch_id,
                 status=compilation.status,
                 fault_traceback=f"Cannot execute — compilation status: {compilation.status}",
                 security_violations=[compilation.violation_detail or ""],
             )
+        if self._closed:
+            return ExecutionTrace(
+                patch_id=compilation.patch_id,
+                status=SandboxStatus.FAULT,
+                fault_traceback="Sandbox engine is shut down",
+            )
 
         source_code = textwrap.dedent(source_code)
-        timeout_s = self._cfg.max_execution_us / 1_000_000.0
-
+        timeout_s = max(0.01, self._cfg.max_execution_us / 1_000_000.0)
         t0_ns = time.perf_counter_ns()
+        receive_conn = None
+        send_conn = None
+        process = None
 
         try:
-            loop = __import__("asyncio").get_event_loop()
-            future = loop.run_in_executor(
-                self._process_pool,
-                _sandbox_worker,
-                source_code,
-                self._cfg.allow_imports,
-                self._cfg.deny_builtins,
-                self._cfg.max_output_bytes,
+            ctx = multiprocessing.get_context("spawn")
+            receive_conn, send_conn = ctx.Pipe(duplex=False)
+            process = ctx.Process(
+                target=_sandbox_worker_entry,
+                args=(
+                    send_conn,
+                    source_code,
+                    self._cfg.allow_imports,
+                    self._cfg.deny_builtins,
+                    self._cfg.max_output_bytes,
+                ),
+                daemon=True,
             )
-            stdout_cap, ret_val, peak_kb = await __import__("asyncio").wait_for(
-                future, timeout=timeout_s
-            )
-            elapsed_us = (time.perf_counter_ns() - t0_ns) / 1_000.0
+            process.start()
+            send_conn.close()
+            send_conn = None
 
-            # Post-hoc memory enforcement
+            deadline = time.monotonic() + timeout_s
+            while process.is_alive() and time.monotonic() < deadline:
+                await asyncio.sleep(min(0.01, max(0.001, deadline - time.monotonic())))
+
+            if process.is_alive():
+                process.terminate()
+                await asyncio.to_thread(process.join, 1.0)
+                if process.is_alive() and hasattr(process, "kill"):
+                    process.kill()
+                    await asyncio.to_thread(process.join, 1.0)
+                elapsed_us = (time.perf_counter_ns() - t0_ns) / 1_000.0
+                logger.error(
+                    f"[{compilation.patch_id}] TIMED_OUT after {elapsed_us:.2f}us "
+                    f"(limit: {self._cfg.max_execution_us}us); worker terminated"
+                )
+                return ExecutionTrace(
+                    patch_id=compilation.patch_id,
+                    status=SandboxStatus.TIMED_OUT,
+                    execution_us=elapsed_us,
+                    fault_traceback=(
+                        f"Execution exceeded {self._cfg.max_execution_us}us; "
+                        "the child process was terminated"
+                    ),
+                )
+
+            await asyncio.to_thread(process.join, 0.1)
+            elapsed_us = (time.perf_counter_ns() - t0_ns) / 1_000.0
+            if not receive_conn.poll():
+                return ExecutionTrace(
+                    patch_id=compilation.patch_id,
+                    status=SandboxStatus.FAULT,
+                    execution_us=elapsed_us,
+                    fault_traceback=f"Sandbox worker exited without a result (exit code {process.exitcode})",
+                )
+
+            status, payload = receive_conn.recv()
+            if status != "ok":
+                return ExecutionTrace(
+                    patch_id=compilation.patch_id,
+                    status=SandboxStatus.FAULT,
+                    execution_us=elapsed_us,
+                    fault_traceback=str(payload),
+                )
+
+            stdout_cap, ret_val, peak_kb = payload
             if peak_kb > self._cfg.max_memory_kb:
                 logger.warning(
                     f"[{compilation.patch_id}] MEMORY_EXCEEDED: "
@@ -469,18 +536,15 @@ class WasmIsolationEngine:
                     peak_memory_kb=peak_kb,
                     execution_us=elapsed_us,
                     fault_traceback=(
-                        f"Memory limit exceeded: {peak_kb:.1f}KB "
-                        f"(limit: {self._cfg.max_memory_kb}KB)"
+                        f"Measured Python allocation peak exceeded {self._cfg.max_memory_kb}KB "
+                        f"(observed {peak_kb:.1f}KB); this check is post-execution"
                     ),
                 )
 
             logger.info(
-                f"[{compilation.patch_id}] EXECUTED | "
-                f"time={elapsed_us:.2f}us | "
-                f"mem={peak_kb:.1f}KB | "
-                f"return={ret_val!r}"
+                f"[{compilation.patch_id}] EXECUTED | time={elapsed_us:.2f}us | "
+                f"mem={peak_kb:.1f}KB | return={ret_val!r}"
             )
-
             return ExecutionTrace(
                 patch_id=compilation.patch_id,
                 status=SandboxStatus.EXECUTED,
@@ -490,32 +554,26 @@ class WasmIsolationEngine:
                 execution_us=elapsed_us,
             )
 
-        except __import__("asyncio").TimeoutError:
-            elapsed_us = (time.perf_counter_ns() - t0_ns) / 1_000.0
-            logger.error(
-                f"[{compilation.patch_id}] TIMED_OUT after {elapsed_us:.2f}us "
-                f"(limit: {self._cfg.max_execution_us}us)"
-            )
-            return ExecutionTrace(
-                patch_id=compilation.patch_id,
-                status=SandboxStatus.TIMED_OUT,
-                execution_us=elapsed_us,
-                fault_traceback=(
-                    f"Execution exceeded {self._cfg.max_execution_us}us fuel limit "
-                    f"(self-terminated at {elapsed_us:.2f}us)"
-                ),
-            )
-
         except Exception as exc:
             elapsed_us = (time.perf_counter_ns() - t0_ns) / 1_000.0
-            tb_str = traceback.format_exc()
-            logger.error(f"[{compilation.patch_id}] FAULT: {exc}")
+            logger.error(f"[{compilation.patch_id}] Sandbox worker failed: {exc}")
             return ExecutionTrace(
                 patch_id=compilation.patch_id,
                 status=SandboxStatus.FAULT,
                 execution_us=elapsed_us,
-                fault_traceback=tb_str,
+                fault_traceback=traceback.format_exc(),
             )
+        finally:
+            if process is not None and process.is_alive():
+                process.terminate()
+                await asyncio.to_thread(process.join, 1.0)
+                if process.is_alive() and hasattr(process, "kill"):
+                    process.kill()
+                    await asyncio.to_thread(process.join, 1.0)
+            if receive_conn is not None:
+                receive_conn.close()
+            if send_conn is not None:
+                send_conn.close()
 
     # -----------------------------------------------------------------------
     # Full Pipeline
@@ -580,9 +638,9 @@ class WasmIsolationEngine:
         return proc.memory_info().rss / 1024.0
 
     def shutdown(self) -> None:
-        """Gracefully shut down the process pool."""
-        self._process_pool.shutdown(wait=False, cancel_futures=True)
-        logger.info("WasmIsolationEngine process pool shut down.")
+        """Prevent new work; each execution child is joined or terminated by its caller."""
+        self._closed = True
+        logger.info("WasmIsolationEngine shut down.")
 
     def __del__(self) -> None:
         try:
