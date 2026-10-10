@@ -11,7 +11,7 @@ async def test_simulation_skips_deployment_without_explicit_opt_in(monkeypatch):
     orchestrator = object.__new__(AegisV3Orchestrator)
     orchestrator._simulation = True
 
-    result = await orchestrator._stage_deployment("dummy_app/payment.py", "test-incident")
+    result = await orchestrator._stage_deployment("print(1)", "dummy_app/payment.py", "test-incident")
 
     assert result.stage == PipelineStage.DEPLOYMENT
     assert result.success is True
@@ -26,7 +26,7 @@ async def test_non_simulation_deployment_fails_closed_without_opt_in(monkeypatch
     orchestrator = object.__new__(AegisV3Orchestrator)
     orchestrator._simulation = False
 
-    result = await orchestrator._stage_deployment("dummy_app/payment.py", "test-incident")
+    result = await orchestrator._stage_deployment("print(1)", "dummy_app/payment.py", "test-incident")
 
     assert result.stage == PipelineStage.DEPLOYMENT
     assert result.success is False
@@ -42,7 +42,7 @@ async def test_explicit_demo_opt_in_reaches_demo_deployment_logic(monkeypatch):
     orchestrator._simulation = True
     orchestrator._repo_root = "/path/that/does/not/exist"
 
-    result = await orchestrator._stage_deployment("dummy_app/payment.py", "test-incident")
+    result = await orchestrator._stage_deployment("print(1)", "dummy_app/payment.py", "test-incident")
 
     assert result.stage == PipelineStage.DEPLOYMENT
     assert result.success is False
