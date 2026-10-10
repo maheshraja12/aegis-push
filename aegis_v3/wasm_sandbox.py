@@ -410,15 +410,16 @@ class WasmIsolationEngine:
         """
         Execute a compiled patch inside a process-isolated sandbox.
 
-        The child process runs with a restricted builtins namespace and its
-        stdout is captured. If execution exceeds `max_execution_us`, the
-        future is cancelled and the process is killed — simulating Wasm
-        fuel-metering exhaustion.
+        The worker runs in a ProcessPoolExecutor with restricted builtins and
+        captured stdout. A timeout cancels the awaiting future, but Python's
+        ProcessPoolExecutor does not guarantee termination of the worker
+        process; this is a best-effort timeout, NOT a security boundary or
+        equivalent to Wasm fuel metering. Do not run untrusted patches or
+        enable production deployment based on this mechanism alone.
 
-        Memory usage is tracked via tracemalloc inside the child process.
-        If peak memory exceeds `max_memory_kb`, the result is flagged as
-        MEMORY_EXCEEDED (we cannot pre-empt the child on Windows without
-        psutil, so we enforce this post-hoc).
+        Memory usage is measured with tracemalloc inside the worker. The
+        configured memory limit is enforced post-hoc, after the allocation
+        has already happened; it does not prevent memory exhaustion.
 
         Args:
             source_code:   The patch source text.
