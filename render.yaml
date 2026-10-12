@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: aegis-v3-dashboard
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: aegis-audit-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: AEGIS_ENV
+        value: production
+      - key: AEGIS_DB_PATH
+        value: /var/data/aegis_v3_audit.db
+      - key: AEGIS_DASHBOARD_USERNAME
+        sync: false
+      - key: AEGIS_DASHBOARD_PASSWORD
+        sync: false
+      - key: AEGIS_ENABLE_PIPELINE_API
+        value: "false"

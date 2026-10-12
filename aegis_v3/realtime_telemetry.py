@@ -44,7 +44,9 @@ FRONTEND DESIGN
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime
+import hmac
 import json
 import logging
 import os
@@ -99,13 +101,26 @@ _cluster_snapshot: dict[str, Any] = {}
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Start background broadcast + metrics tasks on startup."""
+    """Start background tasks with state bound to this event loop.
+
+    TestClient and embedded deployments can start/stop the app repeatedly.
+    asyncio.Queue instances may bind to the loop that first awaits them, so
+    create a fresh queue and connection sets for each lifespan instead of
+    reusing module-level loop-bound state across event loops.
+    """
+    global _broadcast_q, _telemetry_clients, _metrics_clients
+    _broadcast_q = asyncio.Queue(maxsize=500)
+    _telemetry_clients = set()
+    _metrics_clients = set()
+
     broadcast_task = asyncio.create_task(_broadcast_loop(), name="broadcast-loop")
-    metrics_task   = asyncio.create_task(_metrics_loop(), name="metrics-loop")
-    yield
-    broadcast_task.cancel()
-    metrics_task.cancel()
-    await asyncio.gather(broadcast_task, metrics_task, return_exceptions=True)
+    metrics_task = asyncio.create_task(_metrics_loop(), name="metrics-loop")
+    try:
+        yield
+    finally:
+        broadcast_task.cancel()
+        metrics_task.cancel()
+        await asyncio.gather(broadcast_task, metrics_task, return_exceptions=True)
 
 
 # ---------------------------------------------------------------------------
@@ -119,12 +134,65 @@ app = FastAPI(
     lifespan=_lifespan,
 )
 
+_DEFAULT_ORIGINS = ("http://127.0.0.1:8001", "http://localhost:8001")
+_allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("AEGIS_ALLOWED_ORIGINS", ",".join(_DEFAULT_ORIGINS)).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_allowed_origins,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+def _basic_auth_authorized(authorization: str | None) -> bool:
+    """Validate HTTP Basic credentials without logging or exposing the secret."""
+    expected_user = os.getenv("AEGIS_DASHBOARD_USERNAME", "")
+    expected_password = os.getenv("AEGIS_DASHBOARD_PASSWORD", "")
+    production = os.getenv("AEGIS_ENV", "development").strip().lower() == "production"
+    if not expected_user and not expected_password:
+        return not production
+    if not expected_user or not expected_password:
+        return False
+    if not authorization or not authorization.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(authorization[6:], validate=True).decode("utf-8")
+        username, password = decoded.split(":", 1)
+    except (ValueError, UnicodeDecodeError):
+        return False
+    return hmac.compare_digest(username, expected_user) and hmac.compare_digest(password, expected_password)
+
+
+@app.middleware("http")
+async def protect_dashboard(request, call_next):
+    """Protect dashboard and API routes; health probes stay public."""
+    if request.url.path not in {"/health", "/ready"} and not _basic_auth_authorized(
+        request.headers.get("authorization")
+    ):
+        from fastapi.responses import JSONResponse as _JSONResponse
+        production = os.getenv("AEGIS_ENV", "development").strip().lower() == "production"
+        expected_user = os.getenv("AEGIS_DASHBOARD_USERNAME", "")
+        expected_password = os.getenv("AEGIS_DASHBOARD_PASSWORD", "")
+        if production and (not expected_user or not expected_password):
+            return _JSONResponse(
+                status_code=503,
+                content={"detail": "Dashboard access is disabled until credentials are configured."},
+            )
+        return _JSONResponse(
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="AEGIS Dashboard"'},
+            content={"detail": "Authentication required."},
+        )
+    return await call_next(request)
+
+
+def _websocket_authorized(websocket: WebSocket) -> bool:
+    """Apply the same auth policy to websocket handshakes."""
+    return _basic_auth_authorized(websocket.headers.get("authorization"))
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +400,16 @@ async def trigger_pipeline(
     if _pipeline_running:
         raise HTTPException(status_code=409, detail="A pipeline is already running.")
 
+    if os.getenv("AEGIS_ENV", "development").strip().lower() == "production" and os.getenv(
+        "AEGIS_ENABLE_PIPELINE_API", "false"
+    ).strip().lower() not in {"1", "true", "yes", "on"}:
+        raise HTTPException(status_code=503, detail="Pipeline execution is disabled in production until sandbox hardening is approved.")
+    if target_file != "dummy_app/payment.py":
+        raise HTTPException(status_code=400, detail="Only the bundled demo target is permitted.")
+    if os.getenv("AEGIS_ENV", "development").strip().lower() == "production" and (
+        not simulation or chaos
+    ):
+        raise HTTPException(status_code=403, detail="Non-simulation execution is disabled in production.")
     sev = IncidentSeverity(severity) if severity in IncidentSeverity.__members__ else IncidentSeverity.P1
     run_id = str(uuid.uuid4())[:8].upper()
 
@@ -355,6 +433,8 @@ async def trigger_pipeline(
 @app.post("/api/chaos/inject", response_class=JSONResponse)
 async def inject_chaos() -> dict:
     """Inject a random chaos bug and trigger an immediate pipeline run."""
+    if os.getenv("AEGIS_ENV", "development").strip().lower() == "production":
+        raise HTTPException(status_code=403, detail="Chaos injection is disabled in production.")
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         raise HTTPException(
@@ -451,6 +531,9 @@ async def _run_pipeline_background(
 @app.websocket("/ws/telemetry")
 async def ws_telemetry(websocket: WebSocket) -> None:
     """Stream TelemetryEvent frames to the client."""
+    if not _websocket_authorized(websocket):
+        await websocket.close(code=1008, reason="Authentication required")
+        return
     await websocket.accept()
     _telemetry_clients.add(websocket)
     logger.info(f"Telemetry WS client connected ({len(_telemetry_clients)} total)")
@@ -479,6 +562,9 @@ async def ws_telemetry(websocket: WebSocket) -> None:
 @app.websocket("/ws/metrics")
 async def ws_metrics(websocket: WebSocket) -> None:
     """Stream ResourceSnapshot frames every second."""
+    if not _websocket_authorized(websocket):
+        await websocket.close(code=1008, reason="Authentication required")
+        return
     await websocket.accept()
     _metrics_clients.add(websocket)
     try:

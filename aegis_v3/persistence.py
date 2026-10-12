@@ -47,9 +47,12 @@ logger = logging.getLogger("aegis.persistence")
 # Database path resolution
 # ---------------------------------------------------------------------------
 
-_DEFAULT_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "aegis_v3_audit.db",
+_DEFAULT_DB_PATH = os.getenv(
+    "AEGIS_DB_PATH",
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "aegis_v3_audit.db",
+    ),
 )
 
 

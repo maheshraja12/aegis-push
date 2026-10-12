@@ -32,6 +32,9 @@ if hasattr(sys.stdout, 'buffer') and sys.stdout.encoding and sys.stdout.encoding
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, REPO_ROOT)
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Structured logging (GAP 7 fix) — must be configured before any aegis import
 # ---------------------------------------------------------------------------
@@ -205,7 +208,7 @@ Examples:
     )
     p.add_argument("--mode",       choices=["dashboard","pipeline","verify","consensus","chaos"],
                    default="dashboard")
-    p.add_argument("--host",       default="0.0.0.0")
+    p.add_argument("--host",       default="127.0.0.1")
     p.add_argument("--port",       type=int, default=8001)
     p.add_argument("--no-simulation", action="store_true",
                    help="Use real OpenAI API instead of simulation patch")
