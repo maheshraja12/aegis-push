@@ -863,6 +863,35 @@ configs = [
 
 ## 🔒 Security Design
 
+## Guarded dashboard deployment
+
+The repository includes a Docker image and Render Blueprint for a **read-only production dashboard**. This is not an approval to run autonomous repair against production systems.
+
+### Local container smoke test
+
+```bash
+docker build -t aegis-v3 .
+docker run --rm -p 8001:8001 \
+  -e AEGIS_ENV=production \
+  -e AEGIS_DASHBOARD_USERNAME=operator \
+  -e AEGIS_DASHBOARD_PASSWORD='replace-with-a-long-random-password' \
+  -e AEGIS_DB_PATH=/var/data/aegis_v3_audit.db \
+  -e AEGIS_ENABLE_PIPELINE_API=false \
+  -v aegis-data:/var/data \
+  aegis-v3
+```
+
+Open `http://127.0.0.1:8001`; the browser should prompt for Basic authentication. Verify `/health` returns 200 and unauthenticated dashboard/API/WebSocket requests are rejected.
+
+### Render deployment
+
+1. Connect the repository to Render and review `render.yaml`.
+2. Set unique `AEGIS_DASHBOARD_USERNAME` and `AEGIS_DASHBOARD_PASSWORD` secret values.
+3. Keep `AEGIS_ENABLE_PIPELINE_API=false`; the hosted dashboard must not execute generated patches.
+4. Deploy, verify health/readiness, authentication, WebSocket connectivity, and persistent audit storage.
+
+The Blueprint requests a paid Starter service and a 1 GB persistent disk. Review Render pricing before creating the service. Adding these files does **not** mean the app has already been deployed.
+
 ## Current Security Boundaries
 
 AEGIS is not production-safe. The following limitations are known and should be treated as release blockers:
