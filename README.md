@@ -54,57 +54,28 @@
 
 ---
 
-## 🎯 What is Aegis V3?\n\n> **Project status:** Experimental / research prototype. Run only against the included dummy application or an isolated test environment. Do not connect it to production systems or enable unattended patch deployment until sandbox escape resistance, verifier soundness, consensus correctness, rollback behavior, secrets handling, and end-to-end recovery have been independently reviewed. CI passing means the configured checks passed; it is not a production-readiness certification.\n
+## 🎯 What is Aegis V3?
 
-**Aegis V3** is an open-source, enterprise-grade **Autonomous Infrastructure Resilience Engine** built in Python. It combines cutting-edge technologies to create a fully automated software repair system:
+**AEGIS V3 is an experimental Python research prototype** for exploring AI-assisted incident repair workflows. It coordinates patch generation or demo patches, static checks, heuristic verification, simulated consensus, guarded deployment logic, and telemetry.
 
-- 🤖 **Artificial Intelligence** (OpenAI GPT-4o) to understand and fix broken code
-- 🏖️ **WebAssembly-style Isolation** to safely test AI-generated patches before applying them
-- 🔬 **Formal Mathematical Verification** to prove a fix is correct — not just test it
-- 🗳️ **Raft Distributed Consensus** so no single agent can push a bad fix alone
-- 🐒 **Chaos Engineering** to intentionally break production and prove it can self-heal
-- 📊 **Real-time Telemetry Dashboard** to watch everything happen live
+Current implementation boundaries:
 
-The goal is to explore safer automated remediation. Current test and simulation results do **not** establish production safety, formal correctness, or reliable sub-second recovery.
+- **Patch generation:** optional OpenAI integration; a hard-coded demo patch is used in simulation mode.
+- **Execution checks:** Python AST/bytecode checks and a child process with timeout handling. This is **not a WebAssembly runtime or a secure sandbox**.
+- **Verification:** interval/rule-based checks are heuristics, not a sound formal proof of program correctness.
+- **Consensus:** a simulated/custom coordinator used for experimentation; it is not independently certified as a production Raft implementation.
+- **Deployment:** demo deployment is disabled by default and must remain limited to a disposable test checkout.
+- **Observability:** stage results and telemetry help inspect the prototype; they do not establish reliability or an SLA.
 
----
+**Safety status:** Do not connect AEGIS to production or enable unattended remediation. CI only reports whether the configured automated checks passed. It does not prove sandbox escape resistance, verifier soundness, rollback correctness, or production readiness.
 
-## 💀 The Problem It Solves
+## 💀 The Problem It Explores
 
-### Without Aegis V3
+Automated repair systems aim to shorten incident diagnosis and recovery. This repository explores pieces of that workflow in a controlled demonstration; it does not claim measured production downtime or financial savings.
 
-```
-🔴 3:00 AM — Bug deployed to production
-🔴 3:05 AM — Monitoring alert fires
-🔴 3:08 AM — On-call engineer's phone rings
-🔴 3:15 AM — Engineer wakes up, logs in
-🔴 3:30 AM — Engineer diagnoses the issue
-🔴 4:00 AM — Fix is written and reviewed
-🔴 4:15 AM — Fix is deployed
-🔴 4:20 AM — System is healthy again
+### Demonstration only
 
-⏱️  TOTAL DOWNTIME: 80 minutes
-💸  COST: $5,600/minute × 80 = $448,000 (Amazon's estimated cost of downtime)
-😴  IMPACT: Engineer sleep disrupted, customer trust damaged
-```
-
-### With Aegis V3
-
-```
-🟢 3:00 AM — Bug deployed to production
-🟢 3:00 AM — Aegis detects the fault (10ms)
-🟢 3:00 AM — AI generates the fix (50ms)
-🟢 3:00 AM — Wasm sandbox validates fix (500ms)
-🟢 3:00 AM — Formal proof verifies fix (1ms)
-🟢 3:00 AM — 5-node cluster votes to deploy (150ms)
-🟢 3:00 AM — Fix deployed and verified (800ms)
-
-⏱️  TOTAL DOWNTIME: 1.5 seconds
-💸  COST: Near zero
-😴  IMPACT: Engineer sleeps, customers never notice
-```
-
----
+The pipeline can simulate a fault in the included dummy application, process a candidate patch, record stage outcomes, and exercise deployment guards. Any timings shown by a local run are environment-dependent measurements, not service-level guarantees. The project must not be used to inject faults into production systems.
 
 ## ✨ Key Features
 
@@ -113,33 +84,25 @@ The goal is to explore safer automated remediation. Current test and simulation 
 - Falls back to **simulation mode** with hardcoded demo patches when no API key is present
 - Supports context-aware patch generation using the full error trace
 
-### 🏖️ WebAssembly-Style Isolation Sandbox
-- Every AI-generated patch runs inside a **process-isolated `ProcessPoolExecutor`** before being applied
-- Restricted `__builtins__` namespace — blocks `open()`, `os`, `sys`, `subprocess`
-- **AST-level denylist**: blocks `import`, `eval()`, `exec()`, dunder attribute access (`__globals__`, `__class__`)
-- **Bytecode audit**: scans compiled bytecode opcodes for `IMPORT_NAME` / `IMPORT_FROM`
-- Sub-microsecond timing with `time.perf_counter_ns()`
-- Memory tracking with `tracemalloc`
-- Configurable execution timeout (default: 3 seconds), memory limit (default: 4MB)
+### 🧪 Python Patch-Execution Checks
 
-### 🔬 Formal Verification Engine
-- **Interval arithmetic** solver that proves patches safe before deployment
-- Checks all 4 critical safety properties:
-  - ✅ **Division Safety** — zero-division cannot occur in any declared variable range
-  - ✅ **Null Safety** — None references are bounded away from null
-  - ✅ **Bounds Checking** — array/list accesses cannot go out of bounds
-  - ✅ **Overflow Safety** — integer arithmetic cannot overflow 64-bit limits
-- Extensible to real **Z3 SMT solver** without interface changes
-- Returns `PROVED`, `REFUTED`, or `UNKNOWN` with full proof tree
+- Performs AST and bytecode checks before attempting execution.
+- Uses a dedicated child process and terminates it when the configured wall-clock timeout is exceeded.
+- Captures output and records execution traces for debugging.
+- Uses tracemalloc to observe Python allocations; this is **not a hard memory limit**.
+- **Important:** this is defense-in-depth for a demo, not a security boundary. It does not provide comprehensive OS/container isolation or guaranteed filesystem/network restrictions. Do not execute untrusted patches outside a disposable environment.
 
-### 🗳️ Raft Consensus Protocol (5-Node Cluster)
-- Full **Raft leader election** with randomized timeouts (150-300ms)
-- **Heartbeat-based log replication** across all nodes
-- **Quorum-based commitment** — a fix cannot be deployed without 3/5 nodes agreeing
-- **Crash-safe persistence** — `currentTerm` and `votedFor` written to SQLite before every RPC (Raft §5.4)
-- **State restoration** on startup — nodes resume without split-vote risk
-- Simulates realistic network faults with configurable failure probability
-- Windows-compatible clock resolution handling
+### 🔎 Heuristic Verification Engine
+
+- Applies interval/rule-based checks to selected classes of risky expressions.
+- Can return PROVED, REFUTED, or UNKNOWN according to the implementation's checks.
+- These results are **not a formal proof of arbitrary program correctness**. Soundness and completeness have not been established, and the checks must not be treated as a substitute for tests, review, or a mature verification tool.
+
+### 🗳️ Experimental Consensus Coordinator
+
+- Exercises leader-election, voting, and persistence concepts in a simulated cluster.
+- Useful for experimenting with recovery workflows and telemetry.
+- Not independently validated as a production-grade Raft implementation; do not use its result as authorization to deploy a patch to live infrastructure.
 
 ### 🐒 Chaos Engineering (Chaos Monkey)
 - **AST-based fault injection** — modifies Python source code at the syntax tree level
@@ -898,41 +861,18 @@ configs = [
 
 ## 🔒 Security Design
 
-Aegis V3 is built with a **defence-in-depth** security model for AI-generated code execution:
+## Current Security Boundaries
 
-### Layer 1: AST Static Analysis
-Before any code runs, the patch's Abstract Syntax Tree is walked for:
-- `ast.Import` / `ast.ImportFrom` — blocks ALL imports (except whitelisted)
-- `ast.Global` / `ast.Nonlocal` — blocks scope escape
-- `ast.Delete` — blocks object deletion
-- `ast.Call` with `eval`, `exec`, `__import__` — blocks dynamic execution
-- `ast.Attribute` with dunder names — blocks `__globals__`, `__class__` etc.
+AEGIS is not production-safe. The following limitations are known and should be treated as release blockers:
 
-### Layer 2: Bytecode Opcode Audit
-After AST passes, compiled bytecode is scanned:
-- `IMPORT_NAME` — dynamic import at runtime
-- `IMPORT_FROM` — from-import at runtime
-- `IMPORT_STAR` — wildcard import
+1. **Python is not WebAssembly.** The patch runner does not implement a WASM runtime or a complete sandbox.
+2. **Process separation is not sufficient isolation.** OS-level policy, container isolation, restricted filesystem mounts, network denial, CPU quotas, and hard memory enforcement are not comprehensively provided.
+3. **Static deny-lists are bypassable in principle.** AST and bytecode checks are defense-in-depth, not a security boundary.
+4. **Verification is heuristic.** It does not prove arbitrary patches correct.
+5. **Deployment must remain opt-in and disposable.** Never point the demo at production repositories or credentials.
+6. **Recovery claims need evidence.** Rollback, secret handling, consensus correctness, and end-to-end failure recovery require independent testing.
 
-> Note: `LOAD_GLOBAL` is NOT in the denylist (fixed in V3 gold-standard upgrade). Python 3.12+ emits `LOAD_GLOBAL` for all name lookups including `True`, `False`, `None`. Only names in `deny_builtins` are blocked.
-
-### Layer 3: Process Isolation
-The patch executes in a **separate OS process** via `ProcessPoolExecutor`:
-- Separate memory space — cannot access parent process
-- Restricted `__builtins__` namespace — only safe functions available
-- Stdout captured and bounded — no unbounded output
-- Timeout enforced — process killed if it runs too long
-
-### Layer 4: Formal Proof
-Mathematical verification before deployment:
-- Division safety proven over declared variable domains
-- Cannot deploy if `REFUTED` — only `PROVED` or `UNKNOWN` proceed
-
-### Layer 5: Distributed Consensus
-No single AI agent can deploy:
-- 3/5 nodes must agree before commit
-- Each node independently validates
-- Crash-safe state prevents double-voting
+The current tests cover selected regressions, including the deployment guard and timeout termination. They do not certify the limitations above as solved.
 
 ### Best Practices
 ```bash
@@ -948,26 +888,9 @@ export OPENAI_API_KEY="sk-..."
 
 ---
 
-## 📈 Performance Benchmarks
+## 📈 Performance Measurements
 
-Measured on Windows 11, Python 3.14, Intel Core i7:
-
-| Stage | Typical Time | Notes |
-|-------|-------------|-------|
-| Fault Injection | 10-50ms | AST parse + file write |
-| Cluster Coordination | 100-300ms | Raft election (5 nodes) |
-| Patch Generation (sim) | 50-100ms | Hardcoded patch load |
-| Patch Generation (AI) | 1,000-3,000ms | OpenAI API round-trip |
-| Wasm Sandbox Compile | 1-5ms | AST + bytecode |
-| Wasm Sandbox Execute | 300-800ms | Process spawn overhead |
-| Formal Verification | 0.5-5ms | Interval arithmetic |
-| Consensus Commit | 10-50ms | Quorum acknowledgement |
-| Deployment + Tests | 500-1,500ms | Subprocess + pytest |
-| Telemetry Flush | 10-50ms | SQLite write |
-| **Total (simulation)** | **~1,500ms** | End-to-end |
-| **Total (real AI)** | **~4,000ms** | With OpenAI API |
-
----
+No reproducible end-to-end benchmark is published at this time. Earlier timing figures in this README were illustrative estimates and must not be interpreted as measured performance or guarantees. To publish credible numbers, record the machine/OS/Python version, run the same workload repeatedly, report sample size and percentiles, and include failures and cold-start overhead.
 
 ## 📁 Project Structure
 
