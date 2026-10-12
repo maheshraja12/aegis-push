@@ -64,3 +64,21 @@ def test_websocket_rejects_missing_production_credentials(monkeypatch):
         with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect("/ws/telemetry"):
                 pass
+
+
+
+def test_websocket_accepts_configured_basic_auth(monkeypatch):
+    import base64
+    import json
+
+    monkeypatch.setenv("AEGIS_ENV", "production")
+    monkeypatch.setenv("AEGIS_DASHBOARD_USERNAME", "operator")
+    monkeypatch.setenv("AEGIS_DASHBOARD_PASSWORD", "test-only-password")
+    token = base64.b64encode(b"operator:test-only-password").decode("ascii")
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/ws/telemetry",
+            headers={"Authorization": f"Basic {token}"},
+        ) as websocket:
+            message = json.loads(websocket.receive_text())
+            assert message["title"] == "CONNECTED"
