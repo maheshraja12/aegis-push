@@ -6,7 +6,7 @@
 <img src="https://img.shields.io/badge/FastAPI-0.111-009688?style=for-the-badge&logo=fastapi&logoColor=white"/>
 <img src="https://img.shields.io/badge/OpenAI-GPT--4o-412991?style=for-the-badge&logo=openai&logoColor=white"/>
 <img src="https://img.shields.io/badge/Pydantic-v2-E92063?style=for-the-badge&logo=pydantic&logoColor=white"/>
-<img src="https://img.shields.io/badge/Tests-28%20Passed-4CAF50?style=for-the-badge&logo=pytest&logoColor=white"/>
+<img src="https://img.shields.io/badge/Tests-CI%20Pending-4CAF50?style=for-the-badge&logo=pytest&logoColor=white"/>
 <img src="https://img.shields.io/badge/License-MIT-FFC107?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/Status-Experimental-orange?style=for-the-badge"/>
 
