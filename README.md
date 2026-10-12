@@ -45,7 +45,7 @@
 12. [Testing](#-testing)
 13. [Configuration](#️-configuration)
 14. [Security Design](#-security-design)
-15. [Performance Benchmarks](#-performance-benchmarks)
+15. [Performance Measurements](#-performance-measurements)
 16. [Project Structure](#-project-structure)
 17. [Dependencies](#-dependencies)
 18. [Roadmap](#️-roadmap)
@@ -80,7 +80,7 @@ The pipeline can simulate a fault in the included dummy application, process a c
 ## ✨ Key Features
 
 ### 🤖 AI-Powered Patch Generation
-- Uses **OpenAI GPT-4o** to analyze broken code and generate production-quality fixes
+- Uses the optional OpenAI API to propose candidate patches for controlled demo workflows
 - Falls back to **simulation mode** with hardcoded demo patches when no API key is present
 - Supports context-aware patch generation using the full error trace
 
@@ -264,7 +264,7 @@ else:
 
 ---
 
-### Stage 4: WASM_SANDBOX 🏖️ (runs in parallel with Stage 5)
+### Stage 4: WASM_SANDBOX 🧪 (legacy stage name; Python checks, not WebAssembly)
 ```python
 engine = WasmIsolationEngine(SandboxConfig(...))
 compilation = await engine.compile_patch(patch_code, patch_id)
@@ -295,7 +295,7 @@ report = await engine.verify_patch(patch_code, description)
 1. **Variable domain declaration** — establishes valid input ranges
 2. **Constraint extraction** — scans AST for division ops, comparisons, subscripts, large literals
 3. **Interval arithmetic solving** — evaluates each constraint over the declared domains
-4. **Verdict computation** — `PROVED` if all constraints safe, `REFUTED` if any constraint fails
+4. **Heuristic verdict computation** — returns `PROVED`, `REFUTED`, or `UNKNOWN` according to implemented rules; these labels are not a formal correctness proof
 
 **Output:** `VerificationReport` with `overall_verdict`, `is_division_safe`, `constraints_checked`, `critical_failures`
 
@@ -357,14 +357,14 @@ await emit_raw(TelemetryEvent(event_type=ALERT, ...))
 ## 🔩 Core Modules
 
 ### `aegis_v3/orchestrator.py` — Pipeline Coordinator
-The central runtime. Manages the 8-stage pipeline with precise `perf_counter_ns()` timing. Initializes all sub-engines lazily. Coordinates parallel execution of Wasm sandbox and formal verification (Stages 4+5 run concurrently). Integrates audit log backend and MTTR tracking.
+The central runtime. Manages an 8-stage experimental pipeline with `perf_counter_ns()` timing. Coordinates Python patch-execution checks and heuristic verification (Stages 4+5 run concurrently), plus audit logging and MTTR tracking.
 
 **Key classes:** `AegisV3Orchestrator`, `_StageTimer`
 **Key functions:** `run_full_pipeline()`, `_retry_subprocess()`, `_emit_raw()`
 
 ---
 
-### `aegis_v3/wasm_sandbox.py` — Isolation Engine
+### `aegis_v3/wasm_sandbox.py` — Python Patch-Execution Checks (legacy module name)
 Simulates a WebAssembly runtime's security model in Python. Uses `ProcessPoolExecutor` for true OS-level process isolation. Two-phase security check: AST static analysis then bytecode opcode audit.
 
 **Key classes:** `WasmIsolationEngine`, `SandboxConfig`, `_DenylistVisitor`
@@ -786,7 +786,7 @@ pytest tests/test_v3_pipeline.py -v --asyncio-mode=auto -k "not Integration"
 # Test formal verification only
 pytest tests/test_v3_pipeline.py::TestFormalVerification -v --asyncio-mode=auto
 
-# Test Wasm sandbox only
+# Test Python patch checks (legacy class/module name)
 pytest tests/test_v3_pipeline.py::TestWasmSandbox -v --asyncio-mode=auto
 
 # Test persistence only
@@ -834,7 +834,7 @@ from aegis_v3.schema_v3 import SandboxConfig
 
 engine = WasmIsolationEngine(SandboxConfig(
     max_execution_us=3_000_000,   # 3 second execution timeout
-    max_memory_kb=4_096,          # 4MB memory limit
+    max_memory_kb=4_096,          # observed-allocation threshold; not OS-enforced
     max_ast_nodes=800,            # max complexity
     allow_imports=["math", "re"], # whitelisted imports
     deny_builtins=["open", "eval", "exec", "__import__"],
@@ -907,7 +907,7 @@ MY VISION/
 │   ├── orchestrator.py             ← 8-stage pipeline coordinator (1,200+ lines)
 │   ├── wasm_sandbox.py             ← Process-isolated patch execution (590+ lines)
 │   ├── formal_verification.py      ← Interval arithmetic SMT proof engine (800+ lines)
-│   ├── distributed_consensus.py    ← Raft protocol 5-node cluster (680+ lines)
+│   ├── distributed_consensus.py    ← experimental simulated consensus coordinator
 │   ├── chaos_monkey.py             ← AST-based fault injection (500+ lines)
 │   ├── realtime_telemetry.py       ← FastAPI dashboard + WebSocket (1,200+ lines)
 │   ├── persistence.py              ← Async SQLite audit log + Raft storage (300+ lines)
