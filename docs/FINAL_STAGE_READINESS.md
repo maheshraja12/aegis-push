@@ -6,7 +6,7 @@ This document defines the implementation boundary before deployment. Deployment 
 
 - Python-based patch analysis and execution prototype.
 - AST/bytecode checks and a process-based timeout regression test are present in the current project history.
-- A draft hardening PR exists: https://github.com/maheshraja12/aegis-push/pull/1
+- Dashboard hardening is merged in PR #1; latest CI evidence (41 tests, Docker build, guarded-container smoke test): https://github.com/maheshraja12/aegis-push/actions/runs/38263854656
 
 ## Required engineering gates before calling this release-ready
 
