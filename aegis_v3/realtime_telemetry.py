@@ -140,8 +140,10 @@ def _basic_auth_authorized(authorization: str | None) -> bool:
     expected_user = os.getenv("AEGIS_DASHBOARD_USERNAME", "")
     expected_password = os.getenv("AEGIS_DASHBOARD_PASSWORD", "")
     production = os.getenv("AEGIS_ENV", "development").strip().lower() == "production"
-    if not expected_user or not expected_password:
+    if not expected_user and not expected_password:
         return not production
+    if not expected_user or not expected_password:
+        return False
     if not authorization or not authorization.startswith("Basic "):
         return False
     try:
