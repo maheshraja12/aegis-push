@@ -27,3 +27,28 @@ jobs:
         run: python -m compileall -q aegis_v3 run_aegis_v3.py
       - name: Run unit tests
         run: pytest -q tests
+
+      - name: Build guarded dashboard container
+        run: docker build --tag aegis-v3:ci .
+      - name: Smoke test guarded dashboard container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name aegis-v3-ci \
+            --publish 8001:8001 \
+            --env AEGIS_ENV=production \
+            --env AEGIS_DASHBOARD_USERNAME=operator \
+            --env AEGIS_DASHBOARD_PASSWORD=ci-test-password \
+            --env AEGIS_ENABLE_PIPELINE_API=false \
+            --env AEGIS_DB_PATH=/tmp/aegis-v3-ci.db \
+            aegis-v3:ci
+          trap 'docker rm --force aegis-v3-ci >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for _ in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8001/health >/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = "1"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8001/api/status)" = "401"
+          test "$(curl --silent --user operator:ci-test-password --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8001/api/status)" = "200"
+          test "$(curl --silent --user operator:ci-test-password --output /dev/null --write-out '%{http_code}' --request POST http://127.0.0.1:8001/api/pipeline/run)" = "503"
