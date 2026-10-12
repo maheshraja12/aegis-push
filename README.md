@@ -804,7 +804,9 @@ pytest tests/test_v3_pipeline.py::TestAuditLogBackend -v --asyncio-mode=auto
 | `TestRaftPersistenceBackend` | 2 | Persist+load state round-trip, fresh node → term=0 |
 | `TestSchemaModels` | 4 | MttrRecord.compute_mttr positive, unresolved → None, PipelineRunRecord defaults, TelemetryEventType enum |
 | `TestFullPipelineIntegration` | 1 | Complete end-to-end simulation pipeline, 8 stages, success=True |
-| **TOTAL** | **28** | **✅ 28/28 PASSED** |
+| `TestDeploymentGuard` | 3 | Deployment is blocked by default and demo opt-in remains guarded |
+| `TestSandboxTimeout` | 1 | Infinite-loop worker is terminated at the configured timeout |
+| **TOTAL** | **32** | **32 tests passed in the latest CI run** |
 
 ---
 
