@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+import aegis_v3.realtime_telemetry as telemetry
 from aegis_v3.realtime_telemetry import app
 
 
@@ -92,3 +93,12 @@ def test_partial_dashboard_credentials_fail_closed(monkeypatch):
     with TestClient(app) as client:
         response = client.get("/api/status")
     assert response.status_code == 401
+
+def test_repeated_lifespan_startup_uses_fresh_asyncio_queue():
+    queues = []
+    for _ in range(2):
+        with TestClient(app) as client:
+            assert client.get("/health").status_code == 200
+            queues.append(telemetry._broadcast_q)
+    assert queues[0] is not queues[1]
+
