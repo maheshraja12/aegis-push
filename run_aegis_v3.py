@@ -32,6 +32,9 @@ if hasattr(sys.stdout, 'buffer') and sys.stdout.encoding and sys.stdout.encoding
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, REPO_ROOT)
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Structured logging (GAP 7 fix) — must be configured before any aegis import
 # ---------------------------------------------------------------------------
