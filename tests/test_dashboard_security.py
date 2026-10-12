@@ -82,3 +82,13 @@ def test_websocket_accepts_configured_basic_auth(monkeypatch):
         ) as websocket:
             message = json.loads(websocket.receive_text())
             assert message["title"] == "CONNECTED"
+
+
+
+def test_partial_dashboard_credentials_fail_closed(monkeypatch):
+    monkeypatch.setenv("AEGIS_ENV", "development")
+    monkeypatch.setenv("AEGIS_DASHBOARD_USERNAME", "operator")
+    monkeypatch.delenv("AEGIS_DASHBOARD_PASSWORD", raising=False)
+    with TestClient(app) as client:
+        response = client.get("/api/status")
+    assert response.status_code == 401
