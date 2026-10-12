@@ -101,13 +101,26 @@ _cluster_snapshot: dict[str, Any] = {}
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Start background broadcast + metrics tasks on startup."""
+    """Start background tasks with state bound to this event loop.
+
+    TestClient and embedded deployments can start/stop the app repeatedly.
+    asyncio.Queue instances may bind to the loop that first awaits them, so
+    create a fresh queue and connection sets for each lifespan instead of
+    reusing module-level loop-bound state across event loops.
+    """
+    global _broadcast_q, _telemetry_clients, _metrics_clients
+    _broadcast_q = asyncio.Queue(maxsize=500)
+    _telemetry_clients = set()
+    _metrics_clients = set()
+
     broadcast_task = asyncio.create_task(_broadcast_loop(), name="broadcast-loop")
-    metrics_task   = asyncio.create_task(_metrics_loop(), name="metrics-loop")
-    yield
-    broadcast_task.cancel()
-    metrics_task.cancel()
-    await asyncio.gather(broadcast_task, metrics_task, return_exceptions=True)
+    metrics_task = asyncio.create_task(_metrics_loop(), name="metrics-loop")
+    try:
+        yield
+    finally:
+        broadcast_task.cancel()
+        metrics_task.cancel()
+        await asyncio.gather(broadcast_task, metrics_task, return_exceptions=True)
 
 
 # ---------------------------------------------------------------------------
