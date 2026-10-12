@@ -205,7 +205,7 @@ Examples:
     )
     p.add_argument("--mode",       choices=["dashboard","pipeline","verify","consensus","chaos"],
                    default="dashboard")
-    p.add_argument("--host",       default="0.0.0.0")
+    p.add_argument("--host",       default="127.0.0.1")
     p.add_argument("--port",       type=int, default=8001)
     p.add_argument("--no-simulation", action="store_true",
                    help="Use real OpenAI API instead of simulation patch")
