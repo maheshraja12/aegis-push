@@ -189,7 +189,7 @@ def run_consensus(node_count: int = 5) -> None:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="run_aegis_v3",
-        description="Aegis V3: Autonomous Infrastructure Resilience Engine",
+        description="AEGIS V3: Experimental repair workflow and dashboard",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Modes:
