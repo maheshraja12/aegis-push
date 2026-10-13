@@ -122,7 +122,7 @@ def run_pipeline(simulation: bool = True, chaos: bool = False) -> None:
 
 
 # ---------------------------------------------------------------------------
-# MODE: verify (standalone formal verification)
+# MODE: verify (standalone heuristic verification checks)
 # ---------------------------------------------------------------------------
 
 async def run_verify_async(patch_file: str) -> None:
@@ -189,13 +189,13 @@ def run_consensus(node_count: int = 5) -> None:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="run_aegis_v3",
-        description="Aegis V3: Autonomous Infrastructure Resilience Engine",
+        description="AEGIS V3: Experimental repair workflow and dashboard",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Modes:
   dashboard  Start the FastAPI web UI on http://localhost:8001 (default)
   pipeline   Run the full 8-stage healing pipeline (console output)
-  verify     Run formal verification on a patch file
+  verify     Run heuristic verification checks on a patch file
   consensus  Test the Raft cluster election standalone
 
 Examples:
@@ -224,8 +224,8 @@ def main() -> None:
 
     print("""
   ================================================================
-  AEGIS V3 PROMETHEUS -- Autonomous Infrastructure Resilience
-  Wasm Sandbox | Raft Consensus | Formal Verification | AI Swarm
+  AEGIS V3 -- Experimental Repair Workflow
+  Python Execution Checks | Simulated Consensus | Heuristic Verification
   ================================================================""")
     print(f"  Mode: {args.mode.upper()}\n")
 
