@@ -1,14 +1,14 @@
 """
 ==============================================================================
-Aegis V3: Enterprise Autonomous Infrastructure Resilience Engine
+Aegis V3: Experimental Infrastructure Repair Prototype
 aegis_v3/realtime_telemetry.py — FastAPI Real-Time Infrastructure Dashboard
 ==============================================================================
 
 PURPOSE
 -------
-Executive-grade, real-time infrastructure monitoring portal. Every sub-system
-event (cluster elections, proof completions, sandbox results, stage timings)
-is streamed via WebSocket to a fully animated, Tailwind CSS dashboard.
+Experimental telemetry dashboard. Pipeline events (simulated coordinator state,
+heuristic verification results, Python execution checks, and stage timings) are
+streamed via WebSocket to the dashboard.
 
 BACKEND ARCHITECTURE
 --------------------
@@ -31,10 +31,10 @@ FRONTEND DESIGN
     - CSS animations: pulsing LED status indicators, sliding bars
 
   Panels:
-    [1] Cluster Health     — Real-time Raft node roles (Leader/Follower/Offline)
+    [1] Simulated Coordinator — Experimental node roles (Leader/Follower/Offline)
     [2] Pipeline Progress  — 8-stage progress tracker with microsecond timings
-    [3] Formal Proofs      — Live proof tree updates (PROVED / REFUTED / UNKNOWN)
-    [4] Wasm Sandbox       — Compile/execute timing + memory gauge
+    [3] Heuristic Results   — Rule-based result labels (PROVED / REFUTED / UNKNOWN; not formal proofs)
+    [4] Python Checks       — Compile/execute timing + memory gauge; not a secure sandbox
     [5] Resource Monitor   — CPU%, RAM%, active tasks, event queue depth
     [6] Event Feed         — Scrolling live event log (last 50 events)
     [7] Controls           — "Run Pipeline" + "Simulate Chaos" buttons
@@ -128,8 +128,8 @@ async def _lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Aegis V3 — Infrastructure Resilience Engine",
-    description="Real-time monitoring portal for the Autonomous Self-Healing Infrastructure",
+    title="AEGIS V3 — Experimental Repair Workflow",
+    description="Experimental dashboard for a guarded, simulated repair workflow",
     version="3.0.0",
     lifespan=_lifespan,
 )
@@ -394,7 +394,7 @@ async def trigger_pipeline(
     simulation: bool = True,
     chaos: bool = False,
 ) -> dict:
-    """Trigger a new Aegis V3 self-healing pipeline asynchronously."""
+    """Trigger a new AEGIS V3 experimental pipeline asynchronously."""
     global _pipeline_running
 
     if _pipeline_running:
@@ -888,11 +888,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- ─── Row 3: Formal Verification + Wasm Sandbox ────────────────────── -->
+  <!-- ─── Row 3: Heuristic Verification + Python Execution Checks ───────── -->
 
-  <!-- Formal Verification Proof Tree -->
+  <!-- Heuristic Verification Results -->
   <div class="col-span-12 lg:col-span-6 panel p-4">
-    <div class="panel-title mb-3">Formal Verification — Proof Tree</div>
+    <div class="panel-title mb-3">Heuristic Verification — Rule Results</div>
     <div class="grid grid-cols-4 gap-2 mb-3" id="proof-properties">
       <div class="proof-node proof-UNKNOWN" id="prop-div">
         <span class="text-yellow-400 font-bold">?</span>
@@ -920,9 +920,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Wasm Sandbox -->
+  <!-- Python Execution Checks (not an OS/container sandbox) -->
   <div class="col-span-12 lg:col-span-6 panel p-4">
-    <div class="panel-title mb-3">Wasm Isolation Sandbox</div>
+    <div class="panel-title mb-3">Python Execution Checks</div>
     <div class="grid grid-cols-2 gap-4">
       <div>
         <div class="text-xs text-slate-500 mb-2">Compile Time</div>
@@ -982,8 +982,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
 <!-- ═══════ FOOTER ═══════════════════════════════════════════════════════ -->
 <footer class="text-center py-4 text-xs text-slate-700 border-t border-slate-800/50">
-  Aegis V3 Prometheus — Enterprise Autonomous Infrastructure Resilience Engine &nbsp;|&nbsp;
-  Wasm Sandbox · Raft Consensus · Formal Verification · AI Swarm
+  AEGIS V3 — Experimental Repair Workflow &nbsp;|&nbsp;
+  Python checks · Simulated consensus · Heuristic verification
 </footer>
 
 <script>
@@ -1000,8 +1000,8 @@ const STAGE_LABELS = {
   FAULT_INJECTION: "Fault Injection",
   CLUSTER_COORDINATION: "Raft Cluster Election",
   PATCH_GENERATION: "AI Patch Generation",
-  WASM_SANDBOX: "Wasm Sandbox",
-  FORMAL_VERIFICATION: "Formal Verification",
+  WASM_SANDBOX: "Python Execution Checks",
+  FORMAL_VERIFICATION: "Heuristic Verification",
   CONSENSUS_COMMIT: "Consensus Commit",
   DEPLOYMENT: "Deployment",
   TELEMETRY_FLUSH: "Telemetry Flush",
@@ -1136,7 +1136,7 @@ function updateProof(data) {
   treeEl.innerHTML = `
     <div class="proof-node proof-${v} flex justify-between">
       <span style="color:${v==='PROVED'?'#10b981':v==='REFUTED'?'#ef4444':'#f59e0b'};font-weight:700">${v}</span>
-      <span class="text-slate-400">Global Safety Proof — ${proved}/${total} nodes proved</span>
+      <span class="text-slate-400">Heuristic result summary — ${proved}/${total} nodes labeled</span>
     </div>
     ${(data.critical_failures||[]).map(f=>`
       <div class="proof-node proof-REFUTED text-xs text-red-300">${f.slice(0,80)}</div>
