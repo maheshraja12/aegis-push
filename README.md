@@ -132,7 +132,7 @@ The pipeline can simulate a fault in the included dummy application, process a c
 ### ⏱️ MTTR Tracking (Mean Time To Recovery)
 - Automatically measures time from **bug injection → successful deployment**
 - `MttrRecord` stores full incident lifecycle
-- `compute_mttr()` calculates exact recovery time in seconds
+- `compute_mttr()` calculates elapsed time from the recorded incident and resolution timestamps; accuracy depends on those event definitions.
 - Emitted as a live telemetry `ALERT` event on resolution
 - Aggregate stats: min/max/avg MTTR across all resolved incidents
 
@@ -181,8 +181,8 @@ The pipeline can simulate a fault in the included dummy application, process a c
 ║   │         │                 │                       │                 │   ║
 ║   │  ┌──────▼───────┐  ┌──────▼───────┐  ┌───────────▼──────────────┐  │   ║
 ║   │  │   Stage 4    │  │   Stage 5    │  │        Stage 6           │  │   ║
-║   │  │    WASM      │  │   FORMAL     │  │   CONSENSUS_COMMIT       │  │   ║
-║   │  │   SANDBOX    │◄─►  VERIFY     │  │   (Raft quorum vote)     │  │   ║
+║   │  │   PYTHON     │  │  HEURISTIC   │  │   SIMULATED CONSENSUS    │  │   ║
+║   │  │   CHECKS     │◄─►  CHECKS     │  │   (experimental quorum) │  │   ║
 ║   │  │  (parallel)  │  │  (parallel)  │  │                          │  │   ║
 ║   │  └──────┬───────┘  └──────┬───────┘  └───────────┬──────────────┘  │   ║
 ║   │         │                 │                       │                 │   ║
@@ -220,7 +220,7 @@ The pipeline can simulate a fault in the included dummy application, process a c
 
 ## 🔄 The 8-Stage Pipeline
 
-Every self-healing cycle runs through exactly **8 stages** in sequence:
+In simulation mode, the prototype can exercise an **8-stage workflow**. Stage names describe the experimental pipeline, not a production-validated self-healing guarantee:
 
 ### Stage 1: FAULT_INJECTION 🐒
 ```python
@@ -284,7 +284,7 @@ if compilation.status == SandboxStatus.COMPILED:
 
 ---
 
-### Stage 5: FORMAL_VERIFICATION 🔬 (runs in parallel with Stage 4)
+### Stage 5: HEURISTIC_VERIFICATION 🔬 (legacy runtime stage name; runs in parallel with Stage 4)
 ```python
 engine = FormalVerificationEngine()
 engine.declare_variable("amount",   lo=0.0, hi=1_000_000.0)
@@ -372,7 +372,7 @@ Simulates a WebAssembly runtime's security model in Python. Uses `ProcessPoolExe
 
 ---
 
-### `aegis_v3/formal_verification.py` — Proof Engine
+### `aegis_v3/formal_verification.py` — Heuristic Verification Engine
 Implements an interval arithmetic solver that mimics SMT (Satisfiability Modulo Theories) verification. Walks the patch AST to extract safety constraints, then evaluates each over declared variable domains.
 
 **Key classes:** `FormalVerificationEngine`, `_IntervalSolver`, `_ConstraintExtractor`
@@ -381,7 +381,7 @@ Implements an interval arithmetic solver that mimics SMT (Satisfiability Modulo 
 ---
 
 ### `aegis_v3/distributed_consensus.py` — Raft Cluster
-Full Raft consensus protocol implementation using asyncio tasks as simulated nodes. Supports leader election, log replication, commit quorum, heartbeats, and crash recovery via SQLite persistence.
+Experimental consensus coordinator using asyncio tasks as simulated nodes. It models leader election, log replication, quorum decisions, heartbeats, and SQLite persistence for learning/testing; it is not a production-validated Raft implementation.
 
 **Key classes:** `AgentClusterCoordinator`, `_NodeState`
 **Key functions:** `start_cluster()`, `wait_for_consensus()`, `_follower_loop()`, `_candidate_loop()`, `_leader_loop()`
@@ -460,7 +460,7 @@ python -c "import aegis_v3; print('Aegis V3 ready!')"
 ## 🎮 Running Modes
 
 ### Mode 1: Pipeline (Console — Simulation)
-Watch the full self-healing pipeline run in your terminal with rich colored output. **No API key needed.**
+Run the experimental simulation workflow in your terminal with rich colored output. **No API key is needed for simulation mode.**
 
 ```bash
 python run_aegis_v3.py --mode pipeline
@@ -473,6 +473,8 @@ python run_aegis_v3.py --mode pipeline
   PASS  PATCH_GENERATION              56ms   Simulation patch loaded
   PASS  WASM_SANDBOX                 513ms   compile=3ms | exec=509ms | mem=54.7KB
   PASS  FORMAL_VERIFICATION            1ms   verdict=PROVED | div=PROVED
+
+> Legacy sample output: `WASM_SANDBOX` is a module/stage label, not WebAssembly isolation; `PROVED` is a heuristic verdict label, not a formal proof. The timings above are illustrative, not benchmark evidence.
   PASS  CONSENSUS_COMMIT              11ms   Committed at index=2 | leader=node-02
   PASS  DEPLOYMENT                   778ms   tests=PASS | branch=aegis-v3/fix-xxx
   PASS  TELEMETRY_FLUSH               24ms   Flushed 7 stages | saved to audit log
@@ -519,7 +521,7 @@ python run_aegis_v3.py --mode consensus
 ---
 
 ### Mode 5: Verify (Patch Verification Only)
-Run formal verification on a specific patch file without executing the full pipeline.
+Run the heuristic verification checks on a specific patch file without executing the full pipeline. Results are not formal proofs.
 
 ```bash
 python run_aegis_v3.py --mode verify
@@ -653,7 +655,7 @@ curl -X POST "http://localhost:8001/api/pipeline/run?simulation=true&severity=P1
 ---
 
 #### `POST /api/chaos/inject` — Chaos + Auto-Fix
-Injects a random bug and immediately triggers a full self-healing pipeline.
+Injects a random bug in the demo target and triggers the simulation workflow. Use only in a disposable local checkout.
 ```bash
 curl -X POST "http://localhost:8001/api/chaos/inject"
 ```
@@ -937,7 +939,7 @@ MY VISION/
 │   ├── __init__.py
 │   ├── orchestrator.py             ← 8-stage pipeline coordinator (1,200+ lines)
 │   ├── wasm_sandbox.py             ← Process-isolated patch execution (590+ lines)
-│   ├── formal_verification.py      ← Interval arithmetic SMT proof engine (800+ lines)
+│   ├── formal_verification.py      ← Interval/rule-based heuristic verifier (not an SMT solver)
 │   ├── distributed_consensus.py    ← experimental simulated consensus coordinator
 │   ├── chaos_monkey.py             ← AST-based fault injection (500+ lines)
 │   ├── realtime_telemetry.py       ← FastAPI dashboard + WebSocket (1,200+ lines)
