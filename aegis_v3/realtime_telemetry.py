@@ -788,7 +788,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
     <div>
       <h1 class="text-sm font-bold text-white tracking-wide">AEGIS V3 <span class="text-cyan-400">PROMETHEUS</span></h1>
-      <p class="text-xs text-slate-500">Autonomous Infrastructure Resilience Engine — Mission Control</p>
+      <p class="text-xs text-slate-500">Experimental Repair Workflow — Dashboard</p>
     </div>
   </div>
   <div class="flex items-center gap-6">
