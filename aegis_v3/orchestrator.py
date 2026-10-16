@@ -866,8 +866,68 @@ class AegisV3Orchestrator:
                     ),
                     data={"deployment_skipped": True, "branch_name": None},
                 )
+            # Even explicit opt-in is insufficient on its own: require an operator-
+            # declared disposable checkout, the expected demo target, and a clean
+            # Git worktree before this demo-only stage can mutate files.
+            repo_root = os.path.realpath(self._repo_root)
+            configured_root = os.getenv("AEGIS_DEMO_CHECKOUT_ROOT", "").strip()
+            if not configured_root or os.path.realpath(configured_root) != repo_root:
+                return StageResult(
+                    stage=PipelineStage.DEPLOYMENT,
+                    success=False,
+                    duration_us=timer.duration_us,
+                    error=(
+                        "Deployment blocked: AEGIS_DEMO_CHECKOUT_ROOT must exactly match "
+                        "the disposable demo checkout. This prototype cannot deploy to production."
+                    ),
+                    data={"deployment_skipped": True, "branch_name": None},
+                )
+            if target_file.replace("\\", "/").lstrip("./") != "dummy_app/payment.py":
+                return StageResult(
+                    stage=PipelineStage.DEPLOYMENT,
+                    success=False,
+                    duration_us=timer.duration_us,
+                    error="Deployment blocked: only dummy_app/payment.py is allowed in demo mode.",
+                    data={"deployment_skipped": True, "branch_name": None},
+                )
+            if not os.path.isdir(os.path.join(repo_root, ".git")):
+                return StageResult(
+                    stage=PipelineStage.DEPLOYMENT,
+                    success=False,
+                    duration_us=timer.duration_us,
+                    error="Deployment blocked: demo checkout must be a Git working tree.",
+                    data={"deployment_skipped": True, "branch_name": None},
+                )
+            git_exe = self._find_git()
+            if not git_exe:
+                return StageResult(
+                    stage=PipelineStage.DEPLOYMENT,
+                    success=False,
+                    duration_us=timer.duration_us,
+                    error="Deployment blocked: Git executable is unavailable.",
+                    data={"deployment_skipped": True, "branch_name": None},
+                )
+            status = subprocess.run(
+                [git_exe, "status", "--porcelain"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                encoding="utf-8",
+                errors="replace",
+            )
+            if status.returncode != 0 or status.stdout.strip():
+                return StageResult(
+                    stage=PipelineStage.DEPLOYMENT,
+                    success=False,
+                    duration_us=timer.duration_us,
+                    error="Deployment blocked: disposable checkout must have a clean Git worktree.",
+                    data={"deployment_skipped": True, "branch_name": None},
+                )
             try:
-                target_path = os.path.join(self._repo_root, target_file)
+                target_path = os.path.realpath(os.path.join(repo_root, target_file))
+                if os.path.commonpath([repo_root, target_path]) != repo_root:
+                    raise ValueError("Target path escapes the disposable checkout.")
                 branch_name = f"aegis-v3/fix-{incident_id.lower()}"
 
                 # Write the patch (only the function, not the test block)
