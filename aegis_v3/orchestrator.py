@@ -882,12 +882,22 @@ class AegisV3Orchestrator:
                     ),
                     data={"deployment_skipped": True, "branch_name": None},
                 )
-            if target_file.replace("\\", "/").lstrip("./") != "dummy_app/payment.py":
+            normalized_target = os.path.normpath(target_file).replace("\\", "/")
+            if normalized_target != "dummy_app/payment.py":
                 return StageResult(
                     stage=PipelineStage.DEPLOYMENT,
                     success=False,
                     duration_us=timer.duration_us,
                     error="Deployment blocked: only dummy_app/payment.py is allowed in demo mode.",
+                    data={"deployment_skipped": True, "branch_name": None},
+                )
+            expected_target = os.path.realpath(os.path.join(repo_root, "dummy_app", "payment.py"))
+            if os.path.commonpath([repo_root, expected_target]) != repo_root:
+                return StageResult(
+                    stage=PipelineStage.DEPLOYMENT,
+                    success=False,
+                    duration_us=timer.duration_us,
+                    error="Deployment blocked: demo target resolves outside the disposable checkout.",
                     data={"deployment_skipped": True, "branch_name": None},
                 )
             if not os.path.isdir(os.path.join(repo_root, ".git")):
