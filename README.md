@@ -902,7 +902,7 @@ AEGIS is not production-safe. The following limitations are known and should be 
 2. **Process separation is not sufficient isolation.** OS-level policy, container isolation, restricted filesystem mounts, network denial, CPU quotas, and hard memory enforcement are not comprehensively provided.
 3. **Static deny-lists are bypassable in principle.** AST and bytecode checks are defense-in-depth, not a security boundary.
 4. **Verification is heuristic.** It does not prove arbitrary patches correct.
-5. **Deployment must remain opt-in and disposable.** Never point the demo at production repositories or credentials.
+5. **Deployment must remain opt-in and disposable.** The guard requires `AEGIS_ENABLE_DEMO_DEPLOYMENT=1`, `AEGIS_DEMO_CHECKOUT_ROOT` set to the exact absolute path of a disposable Git checkout, the `dummy_app/payment.py` target, and a clean worktree. Never point it at production repositories or credentials.
 6. **Recovery claims need evidence.** Rollback, secret handling, consensus correctness, and end-to-end failure recovery require independent testing.
 
 The current tests cover selected regressions, including the deployment guard and timeout termination. They do not certify the limitations above as solved.
