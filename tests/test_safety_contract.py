@@ -41,3 +41,32 @@ async def test_demo_opt_in_still_requires_a_real_disposable_checkout(monkeypatch
     assert result.stage == PipelineStage.DEPLOYMENT
     assert result.success is False
     assert result.error
+
+@pytest.mark.asyncio
+async def test_demo_target_path_traversal_is_rejected_before_writes(monkeypatch, tmp_path):
+    """Even an opt-in cannot redirect the demo patch outside its one allowed file."""
+    import subprocess
+
+    checkout = tmp_path / "disposable-checkout"
+    target = checkout / "dummy_app" / "payment.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("def calculate_tax(amount, tax_rate):\n    return amount / tax_rate\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=checkout, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "AEGIS Test"], cwd=checkout, check=True)
+    subprocess.run(["git", "config", "user.email", "aegis-test@example.invalid"], cwd=checkout, check=True)
+    subprocess.run(["git", "add", "dummy_app/payment.py"], cwd=checkout, check=True)
+    subprocess.run(["git", "commit", "-m", "test fixture"], cwd=checkout, check=True, capture_output=True)
+
+    monkeypatch.setenv("AEGIS_ENABLE_DEMO_DEPLOYMENT", "1")
+    monkeypatch.setenv("AEGIS_DEMO_CHECKOUT_ROOT", str(checkout))
+    orchestrator = object.__new__(AegisV3Orchestrator)
+    orchestrator._simulation = True
+    orchestrator._repo_root = str(checkout)
+    before = target.read_text(encoding="utf-8")
+
+    result = await orchestrator._stage_deployment("print('candidate')", "../dummy_app/payment.py", "path-traversal")
+
+    assert result.stage == PipelineStage.DEPLOYMENT
+    assert result.success is False
+    assert "only dummy_app/payment.py" in result.error
+    assert target.read_text(encoding="utf-8") == before
